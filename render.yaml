@@ -1,13 +1,12 @@
 services:
   - type: web
     name: twitter-mcp-server
-    runtime: node
     env: node
     plan: free
-    buildCommand: "npm install && npm run build"
-    startCommand: "npm run start"
+    buildCommand: "npm install"
+    startCommand: "npm start"
     envVars:
       - key: TWITTER_BEARER_TOKEN
         sync: false
-      - key: MCP_SERVER_API_KEY
-        sync: false
+      - key: NODE_ENV
+        value: production
