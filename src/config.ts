@@ -1,7 +1,10 @@
 export interface AppConfig {
   port: number;
   twitterBearerToken: string;
-  mcpServerApiKey: string;
+  /** Optional shared secret for protecting the MCP HTTP endpoint. */
+  mcpServerApiKey?: string;
+  /** Base URL for Twitter/X API (override only for testing). */
+  twitterApiBaseUrl: string;
 }
 
 function requireEnv(name: string): string {
@@ -21,11 +24,13 @@ export function getConfig(): AppConfig {
   }
 
   const twitterBearerToken = requireEnv("TWITTER_BEARER_TOKEN");
-  const mcpServerApiKey = requireEnv("MCP_SERVER_API_KEY");
+  const mcpServerApiKey = process.env.MCP_SERVER_API_KEY;
+  const twitterApiBaseUrl = process.env.TWITTER_API_BASE_URL ?? "https://api.twitter.com/2";
 
   return {
     port,
     twitterBearerToken,
-    mcpServerApiKey
+    mcpServerApiKey,
+    twitterApiBaseUrl
   };
 }

@@ -1,68 +1,119 @@
 # Twitter MCP Server (HTTP, Render-ready)
 
-## Overview
-This project is an MCP server that exposes Twitter/X as tools for LLMs over HTTP. It is built with Node.js, `@modelcontextprotocol/sdk`, Express, and the Twitter API v2. Use it with any MCP-aware client that supports HTTP MCP servers (e.g., ChatGPT custom data sources).
+An MCP-compatible HTTP server that exposes Twitter/X data as tools for ChatGPT Developer Mode. It uses Node.js, TypeScript, Express, and the Model Context Protocol SDK to provide structured endpoints for searching tweets and users.
+
+## Features
+- MCP HTTP server (stdin/stdout-free) using JSON-RPC over `/mcp`.
+- Tools for searching tweets, fetching user timelines, fetching individual tweets, searching users, and checking health.
+- Twitter/X integration via Bearer token with clear, normalized responses.
+- Production-ready Dockerfile for Render deployment.
+- Optional `x-api-key` protection for the MCP endpoint.
 
 ## Prerequisites
-- Node 18+
-- A Twitter/X developer account and **Bearer token** for the Twitter API v2
-- `TWITTER_BEARER_TOKEN` environment variable set to your bearer token
+- Node.js 18+
+- Twitter/X API Bearer token with access to recent search endpoints
+- `TWITTER_BEARER_TOKEN` set in the environment (see `.env.example`)
 
-## Local Setup
+## Quick Start (local)
 1. Install dependencies:
    ```bash
    npm install
    ```
-2. Set your Twitter bearer token:
-   - macOS/Linux:
-     ```bash
-     export TWITTER_BEARER_TOKEN="YOUR_TOKEN_HERE"
-     ```
-   - Windows (PowerShell):
-     ```powershell
-     $env:TWITTER_BEARER_TOKEN="YOUR_TOKEN_HERE"
-     ```
-3. Start the server:
+2. Create a `.env` file based on `.env.example` and set at least `TWITTER_BEARER_TOKEN`.
+3. Build and start the server:
    ```bash
+   npm run build
    npm start
    ```
-4. MCP HTTP endpoint:
-   - URL: `http://localhost:3000/mcp`
-   - Method: `POST`
+4. MCP HTTP endpoint: `http://localhost:3000/mcp` (protected by `x-api-key` if `MCP_SERVER_API_KEY` is set).
+5. Health check: `http://localhost:3000/health`.
 
-## MCP Tools Exposed
-- `twitter_search_recent`
-  - Parameters:
-    - `query` (string, required): search query string.
-    - `max_results` (optional, 10–100): number of tweets to return.
-  - Description: Uses the Twitter API `/tweets/search/recent` endpoint.
-- `twitter_user_tweets`
-  - Parameters:
-    - `username` (string, required, without @)
-    - `max_results` (optional, 5–100)
-  - Description: Resolves the user by username, then fetches recent tweets for that user.
+## npm Scripts
+- `npm run build` – TypeScript compile to `dist/`
+- `npm start` – run compiled server
+- `npm run dev` – start with `ts-node-dev` for hot reload (development only)
+
+## MCP Tools
+All tools return JSON content. Errors are surfaced as plain text messages for clarity.
+
+| Tool | Description | Input |
+| --- | --- | --- |
+| `health` | Connectivity check for the MCP server. | `{}` |
+| `search_tweets` | Search recent tweets by query. | `{ query: string, max_results?: number (1-50, default 10) }` |
+| `get_user_tweets` | Recent tweets for a username. | `{ username: string, max_results?: number (1-50, default 10) }` |
+| `get_tweet_by_id` | Fetch a single tweet by ID. | `{ id: string }` |
+| `search_users` | Search users by name/handle. | `{ query: string, max_results?: number (1-25, default 10) }` |
+| `get_authenticated_profile` | Profile for the bearer token account. | `{}` |
+
+### Example tool call payloads
+- Search tweets:
+  ```json
+  {
+    "method": "search_tweets",
+    "params": { "query": "open source ai", "max_results": 5 }
+  }
+  ```
+- Get user tweets:
+  ```json
+  {
+    "method": "get_user_tweets",
+    "params": { "username": "OpenAI", "max_results": 10 }
+  }
+  ```
+- Get tweet by ID:
+  ```json
+  {
+    "method": "get_tweet_by_id",
+    "params": { "id": "1234567890123456789" }
+  }
+  ```
+
+## Environment Variables
+See `.env.example` for full list. Key values:
+- `TWITTER_BEARER_TOKEN` (required) – Twitter/X API bearer token.
+- `PORT` (optional) – defaults to `3000`.
+- `MCP_SERVER_API_KEY` (optional) – if set, requests to `/mcp` must include header `x-api-key: <value>`.
+- `TWITTER_API_BASE_URL` (optional) – override Twitter API base URL (testing).
+
+## Docker
+Build and run locally:
+```bash
+docker build -t twitter-mcp .
+docker run --rm -p 3000:3000 -e TWITTER_BEARER_TOKEN=YOUR_TOKEN twitter-mcp
+```
 
 ## Deploying on Render
-1. Create a new **Web Service** on Render and connect your Git repo containing this project.
-2. Use the following settings:
-   - Runtime: Node
-   - Build command: `npm install`
-   - Start command: `npm start`
-3. Set environment variable in Render:
-   - `TWITTER_BEARER_TOKEN` = your bearer token
-4. Deploy the service. After deployment, your MCP endpoint will be:
-   - `https://YOUR-SERVICE-NAME.onrender.com/mcp`
+1. Create a new **Web Service**.
+2. Use this repository and select Docker as the environment.
+3. Render will build using the included `Dockerfile`. Ensure environment variable `TWITTER_BEARER_TOKEN` (and optionally `MCP_SERVER_API_KEY`) is set.
+4. Expose port `3000` in the Render service settings (Render automatically maps to an external port).
+5. After deployment your MCP endpoint will be: `https://YOUR-SERVICE.onrender.com/mcp`.
 
-## Connecting from ChatGPT (as an MCP HTTP server)
-1. In ChatGPT or any MCP-aware client, add a new HTTP MCP server / custom data source.
-2. Configure with:
-   - Name: `twitter-mcp`
-   - URL: `https://YOUR-SERVICE-NAME.onrender.com/mcp`
-3. Example prompts once connected:
-   - "Use `twitter_search_recent` to search recent tweets about Sacramento housing."
-   - "Call `twitter_user_tweets` for username `elonmusk` with max_results=10."
+## Connecting to ChatGPT (Developer Mode MCP)
+Add this server as a custom MCP HTTP source. Example JSON configuration:
+```json
+{
+  "name": "twitter-mcp-server",
+  "type": "http",
+  "url": "https://YOUR-SERVICE.onrender.com/mcp",
+  "headers": {
+    "x-api-key": "<your-mcp-api-key-if-configured>"
+  }
+}
+```
+If running locally, set `url` to `http://localhost:3000/mcp`.
 
-## Error Handling & Notes
-- If `TWITTER_BEARER_TOKEN` is missing or invalid, the tools return clear errors.
-- Twitter API rate limits and access tier restrictions apply.
-- Extend `twitter.js` with more endpoints (likes, replies, etc.) and register additional tools in `index.js` as needed.
+### Sample interactions in ChatGPT
+- "Call `search_tweets` for `climate tech` with `max_results` 5."
+- "Use `get_user_tweets` for `nasa` and summarize the latest posts."
+- "Use `search_users` to find researchers named `Jane Doe`."
+- "Call `get_tweet_by_id` for `123...` to get metrics and the URL."
+
+## Error Handling
+- All Twitter errors are converted to readable text (e.g., rate limits or missing credentials).
+- Input validation via Zod enforces required fields and caps `max_results` to safe limits.
+- HTTP 401 returned when `MCP_SERVER_API_KEY` is configured and missing from requests.
+
+## Extending
+To add new tools, register them in `src/mcpServer.ts` and implement the Twitter calls in `src/twitterClient.ts`. Each tool should define a Zod schema for inputs, call the client, and return `jsonContent(...)`.
+
