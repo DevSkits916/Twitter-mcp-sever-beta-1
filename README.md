@@ -1,68 +1,68 @@
-# Twitter MCP Server (Read-Only)
+# Twitter MCP Server (HTTP, Render-ready)
 
-This project is a remote Model Context Protocol (MCP) server that exposes Twitter/X as a read-only data source over the MCP Streamable HTTP transport. It provides tools to fetch the authenticated user's profile, search recent public tweets, and retrieve a user's recent tweets by username.
+## Overview
+This project is an MCP server that exposes Twitter/X as tools for LLMs over HTTP. It is built with Node.js, `@modelcontextprotocol/sdk`, Express, and the Twitter API v2. Use it with any MCP-aware client that supports HTTP MCP servers (e.g., ChatGPT custom data sources).
 
 ## Prerequisites
+- Node 18+
+- A Twitter/X developer account and **Bearer token** for the Twitter API v2
+- `TWITTER_BEARER_TOKEN` environment variable set to your bearer token
 
-- Node.js 20+
-- A valid Twitter/X API v2 Bearer token with permissions for the read-only endpoints used by this server.
+## Local Setup
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
+2. Set your Twitter bearer token:
+   - macOS/Linux:
+     ```bash
+     export TWITTER_BEARER_TOKEN="YOUR_TOKEN_HERE"
+     ```
+   - Windows (PowerShell):
+     ```powershell
+     $env:TWITTER_BEARER_TOKEN="YOUR_TOKEN_HERE"
+     ```
+3. Start the server:
+   ```bash
+   npm start
+   ```
+4. MCP HTTP endpoint:
+   - URL: `http://localhost:3000/mcp`
+   - Method: `POST`
 
-## Configuration
+## MCP Tools Exposed
+- `twitter_search_recent`
+  - Parameters:
+    - `query` (string, required): search query string.
+    - `max_results` (optional, 10–100): number of tweets to return.
+  - Description: Uses the Twitter API `/tweets/search/recent` endpoint.
+- `twitter_user_tweets`
+  - Parameters:
+    - `username` (string, required, without @)
+    - `max_results` (optional, 5–100)
+  - Description: Resolves the user by username, then fetches recent tweets for that user.
 
-Set the following environment variables:
+## Deploying on Render
+1. Create a new **Web Service** on Render and connect your Git repo containing this project.
+2. Use the following settings:
+   - Runtime: Node
+   - Build command: `npm install`
+   - Start command: `npm start`
+3. Set environment variable in Render:
+   - `TWITTER_BEARER_TOKEN` = your bearer token
+4. Deploy the service. After deployment, your MCP endpoint will be:
+   - `https://YOUR-SERVICE-NAME.onrender.com/mcp`
 
-- `TWITTER_BEARER_TOKEN` — your Twitter/X API v2 Bearer token
-- `MCP_SERVER_API_KEY` — shared secret key required in the `x-api-key` header for all MCP requests
-- `PORT` — optional; defaults to `3000` locally. Render automatically sets this value in production.
+## Connecting from ChatGPT (as an MCP HTTP server)
+1. In ChatGPT or any MCP-aware client, add a new HTTP MCP server / custom data source.
+2. Configure with:
+   - Name: `twitter-mcp`
+   - URL: `https://YOUR-SERVICE-NAME.onrender.com/mcp`
+3. Example prompts once connected:
+   - "Use `twitter_search_recent` to search recent tweets about Sacramento housing."
+   - "Call `twitter_user_tweets` for username `elonmusk` with max_results=10."
 
-## Local Development
-
-```bash
-npm install
-export TWITTER_BEARER_TOKEN=your_token_here
-export MCP_SERVER_API_KEY=some-long-random-secret
-npm run build
-npm start
-```
-
-The MCP endpoint will be available at `http://localhost:3000/mcp` (or the port you configured).
-
-## Security Notes
-
-- Every request to `/mcp` must include an `x-api-key` header matching `MCP_SERVER_API_KEY`.
-- The server is strictly read-only and only calls official Twitter/X API v2 endpoints.
-- No scraping, posting, or automation beyond read-only queries is implemented.
-- Ensure compliance with Twitter/X terms, rate limits, and privacy requirements when using this server.
-
-## Example curl Usage
-
-Send a JSON-RPC `initialize` request:
-
-```bash
-curl -X POST http://localhost:3000/mcp \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: $MCP_SERVER_API_KEY" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "initialize",
-    "params": {
-      "protocolVersion": "2025-03-26",
-      "capabilities": {}
-    }
-  }'
-```
-
-After initialization, you can call `tools/list` to discover available tools and `tools/call` to invoke them:
-
-- `twitter_get_profile`
-- `twitter_search_recent_tweets`
-- `twitter_get_user_timeline`
-
-## Deployment on Render
-
-Deploy using the included `render.yaml`. Render sets the `PORT` environment variable automatically. Ensure `TWITTER_BEARER_TOKEN` and `MCP_SERVER_API_KEY` are configured in your Render service environment.
-
-## Using with MCP Clients
-
-Any MCP-aware client can be pointed to the HTTP endpoint (e.g., `https://<your-render-service>.onrender.com/mcp`) using the Streamable HTTP transport and providing the `x-api-key` header. The Twitter tools will be exposed to the client as the three tools listed above.
+## Error Handling & Notes
+- If `TWITTER_BEARER_TOKEN` is missing or invalid, the tools return clear errors.
+- Twitter API rate limits and access tier restrictions apply.
+- Extend `twitter.js` with more endpoints (likes, replies, etc.) and register additional tools in `index.js` as needed.
